@@ -1,3 +1,5 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
-  <text y=".9em" font-size="90">🚴🏼‍♀️</text>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" fill="none" stroke="#2f6fb3" stroke-width="7" stroke-linecap="round" stroke-linejoin="round">
+  <circle cx="24" cy="66" r="18" />
+  <circle cx="76" cy="66" r="18" />
+  <path d="M24 66 L50 66 L40 38 Z M40 38 L68 38 L50 66 M68 38 L76 66 M33 30 H47 M64 28 L68 38 M60 28 H72" />
 </svg>
