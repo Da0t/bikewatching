@@ -95,6 +95,13 @@ function computeStationTraffic(stations, timeFilter = -1) {
   });
 }
 
+// Maps the share of departures to 3 colors: arrivals, balanced, departures
+const stationFlow = d3.scaleQuantize().domain([0, 1]).range([0, 0.5, 1]);
+
+function departureRatio(d) {
+  return d.totalTraffic ? stationFlow(d.departures / d.totalTraffic) : 0.5;
+}
+
 function tooltipText(d) {
   return `${d.totalTraffic} trips (${d.departures} departures, ${d.arrivals} arrivals)`;
 }
@@ -154,6 +161,7 @@ map.on('load', async () => {
     .enter()
     .append('circle')
     .attr('r', (d) => radiusScale(d.totalTraffic))
+    .style('--departure-ratio', (d) => departureRatio(d))
     .each(function (d) {
       // Step 4.4: browser tooltip
       d3.select(this).append('title').text(tooltipText(d));
@@ -187,7 +195,8 @@ map.on('load', async () => {
       .data(filteredStations, (d) => d.short_name)
       .join('circle')
       .attr('r', (d) => radiusScale(d.totalTraffic))
-        .select('title')
+      .style('--departure-ratio', (d) => departureRatio(d))
+      .select('title')
       .text((d) => tooltipText(d));
   }
 
