@@ -1,5 +1,6 @@
-// Import Mapbox as an ES module
+// Import Mapbox and D3 as ES modules
 import mapboxgl from 'https://cdn.jsdelivr.net/npm/mapbox-gl@2.15.0/+esm';
+import * as d3 from 'https://cdn.jsdelivr.net/npm/d3@7.9.0/+esm';
 
 // Check that Mapbox GL JS is loaded
 console.log('Mapbox GL JS Loaded:', mapboxgl);
@@ -12,6 +13,8 @@ const BOSTON_LANES =
   'https://bostonopendata-boston.opendata.arcgis.com/datasets/boston::existing-bike-network-2022.geojson';
 const CAMBRIDGE_LANES =
   'https://raw.githubusercontent.com/cambridgegis/cambridgegis_data/main/Recreation/Bike_Facilities/RECREATION_BikeFacilities.geojson';
+const STATIONS_URL = 'https://dsc106.com/labs/lab07/data/bluebikes-stations.json';
+const TRIPS_URL = 'https://dsc106.com/labs/lab07/data/bluebikes-traffic-2024-03.csv';
 
 // Initialize the map
 const map = new mapboxgl.Map({
@@ -30,6 +33,40 @@ const bikeLaneStyle = {
   'line-opacity': 0.5,
 };
 
+// Convert a station's lon/lat into pixel coordinates on the map
+function getCoords(station) {
+  const point = new mapboxgl.LngLat(+station.lon, +station.lat);
+  const { x, y } = map.project(point);
+  return { cx: x, cy: y };
+}
+
+// Add arrivals, departures and totalTraffic to each station
+function computeStationTraffic(stations, trips) {
+  const departures = d3.rollup(
+    trips,
+    (v) => v.length,
+    (d) => d.start_station_id,
+  );
+
+  const arrivals = d3.rollup(
+    trips,
+    (v) => v.length,
+    (d) => d.end_station_id,
+  );
+
+  return stations.map((station) => {
+    let id = station.short_name;
+    station.arrivals = arrivals.get(id) ?? 0;
+    station.departures = departures.get(id) ?? 0;
+    station.totalTraffic = station.arrivals + station.departures;
+    return station;
+  });
+}
+
+function tooltipText(d) {
+  return `${d.totalTraffic} trips (${d.departures} departures, ${d.arrivals} arrivals)`;
+}
+
 map.on('load', async () => {
   // Step 2: bike lanes
   map.addSource('boston_route', { type: 'geojson', data: BOSTON_LANES });
@@ -47,4 +84,53 @@ map.on('load', async () => {
     source: 'cambridge_route',
     paint: bikeLaneStyle,
   });
+
+  // Step 3.1: station data
+  let jsonData;
+  try {
+    jsonData = await d3.json(STATIONS_URL);
+    console.log('Loaded JSON Data:', jsonData);
+  } catch (error) {
+    console.error('Error loading JSON:', error);
+    return;
+  }
+
+  // Step 4.1: trip data
+  const trips = await d3.csv(TRIPS_URL);
+
+  // Step 4.2: traffic per station
+  const stations = computeStationTraffic(jsonData.data.stations, trips);
+  console.log('Stations Array:', stations);
+
+  // Step 4.3: square-root scale so circle AREA tracks traffic
+  const radiusScale = d3
+    .scaleSqrt()
+    .domain([0, d3.max(stations, (d) => d.totalTraffic)])
+    .range([0, 25]);
+
+  // Step 3.3: one circle per station on the SVG overlay
+  const svg = d3.select('#map').select('svg');
+  const circles = svg
+    .selectAll('circle')
+    .data(stations, (d) => d.short_name) // short_name as the key
+    .enter()
+    .append('circle')
+    .attr('r', (d) => radiusScale(d.totalTraffic))
+    .each(function (d) {
+      // Step 4.4: browser tooltip
+      d3.select(this).append('title').text(tooltipText(d));
+    });
+
+  // Keep the circles lined up with the map as it moves
+  function updatePositions() {
+    circles
+      .attr('cx', (d) => getCoords(d).cx)
+      .attr('cy', (d) => getCoords(d).cy);
+  }
+
+  updatePositions();
+  map.on('move', updatePositions);
+  map.on('zoom', updatePositions);
+  map.on('resize', updatePositions);
+  map.on('moveend', updatePositions);
 });
