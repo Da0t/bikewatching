@@ -21,10 +21,15 @@ const map = new mapboxgl.Map({
   container: 'map', // ID of the div where the map will render
   style: 'mapbox://styles/mapbox/streets-v12', // Map style
   center: [-71.09415, 42.36027], // [longitude, latitude]
-  zoom: 12, // Initial zoom level
+  zoom: 13, // Initial zoom level (13+ so the 3D buildings show)
   minZoom: 5, // Minimum allowed zoom
   maxZoom: 18, // Maximum allowed zoom
+  pitch: 55, // Tilt the camera for a 3D view
+  bearing: -17, // Slight rotation
 });
+
+// Zoom, rotate and tilt buttons (right-drag also rotates and tilts)
+map.addControl(new mapboxgl.NavigationControl({ visualizePitch: true }));
 
 // One style object shared by both bike lane layers
 const bikeLaneStyle = {
@@ -107,6 +112,29 @@ function tooltipText(d) {
 }
 
 map.on('load', async () => {
+  // 3D buildings, extruded to their real heights and kept under the labels
+  const labelLayerId = map
+    .getStyle()
+    .layers.find((layer) => layer.type === 'symbol' && layer.layout?.['text-field'])?.id;
+
+  map.addLayer(
+    {
+      id: '3d-buildings',
+      source: 'composite',
+      'source-layer': 'building',
+      filter: ['==', 'extrude', 'true'],
+      type: 'fill-extrusion',
+      minzoom: 13,
+      paint: {
+        'fill-extrusion-color': '#d9d9d9',
+        'fill-extrusion-height': ['get', 'height'],
+        'fill-extrusion-base': ['get', 'min_height'],
+        'fill-extrusion-opacity': 0.7,
+      },
+    },
+    labelLayerId,
+  );
+
   // Step 2: bike lanes
   map.addSource('boston_route', { type: 'geojson', data: BOSTON_LANES });
   map.addLayer({
